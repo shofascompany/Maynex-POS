@@ -104,9 +104,32 @@ onBeforeUnmount(release)
 .modal-enter-from .modal { opacity: 0; transform: translateY(28px) scale(.94); }
 .modal-leave-to .modal { opacity: 0; transform: scale(.97); }
 
+.body { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+@media (min-width: 1800px) {
+  .lg { max-width: 900px; }
+  .xl { max-width: 1200px; }
+}
+/* short landscape screens: use the whole height */
+@media (max-height: 560px) and (orientation: landscape) {
+  .backdrop { padding: 8px; }
+  .modal { max-height: calc(100dvh - 16px); }
+  .head { padding-top: 16px; }
+  .body { padding-top: 12px; padding-bottom: 14px; }
+}
+/* phones: bottom sheet */
 @media (max-width: 640px) {
-  .backdrop { place-items: end stretch; padding: 0; }
-  .modal { max-height: 92dvh; border-radius: 24px 24px 0 0; }
+  .backdrop { place-items: end stretch; padding: 0; padding-top: calc(24px + var(--safe-t)); }
+  .modal { max-width: none; max-height: calc(100dvh - 24px - var(--safe-t)); border-radius: 26px 26px 0 0; border-bottom: 0; }
+  .modal::before { left: 50%; right: auto; top: 8px; width: 44px; height: 5px; margin-left: -22px; border-radius: 99px; background: var(--border-2); }
+  .head { padding: 26px 18px 0; }
+  .head h3 { font-size: 17px; }
+  .body { padding: 14px 18px 18px; }
+  .modal:not(:has(.head)) .body { padding-top: 28px; }
+  .modal:not(:has(.foot)) .body { padding-bottom: calc(18px + var(--safe-b)); }
+  .foot { padding: 12px 18px calc(12px + var(--safe-b)); }
+  .foot > :deep(.btn) { flex: 1 1 0; min-width: 0; }
+  .foot > :deep(.grow) { display: none; }
   .modal-enter-from .modal { transform: translateY(100%); }
   .modal-leave-to .modal { transform: translateY(60%); }
 }

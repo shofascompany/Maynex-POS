@@ -267,7 +267,13 @@ const actions = computed(() =>
 .cl-ico { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; color: var(--accent-ink); background: color-mix(in srgb, var(--c1) 12%, transparent); }
 .cl-steps li.done .cl-ico { color: #fff; background: var(--success); }
 @media (max-width: 860px) {
-  .hero { padding: 24px; }
-  .hero h1 { font-size: 24px; }
+  .hero { padding: 22px 20px; gap: 18px; border-radius: 22px; }
+  .hero h1 { font-size: clamp(22px, 6vw, 26px); }
+  .hero p { font-size: 14px; }
+  .hero-actions { width: 100%; }
+  .hero-actions .btn { flex: 1 1 140px; }
+  .hero-bg span:nth-child(2) { display: none; }
+  .cl-meter { width: 90px; }
+  .cl-steps li { flex-wrap: wrap; }
 }
 </style>

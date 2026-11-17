@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { LogOut, ChevronsLeft } from '@lucide/vue'
+import { LogOut, ChevronsLeft, Sun, Moon } from '@lucide/vue'
 import { usePos } from '@/stores/pos'
 import { NAV } from '@/router'
 import { useUi } from '@/composables'
@@ -35,6 +35,7 @@ function signOut() {
     <div v-if="open" class="scrim" @click="close"></div>
   </Transition>
   <aside class="sidebar" :class="{ open, collapsed: ui.collapsed }">
+    <div class="sheet-handle" aria-hidden="true" @click="close"></div>
     <div class="brand">
       <BrandMark :size="38" />
       <div class="brand-text fadeable">
@@ -72,6 +73,9 @@ function signOut() {
           <strong class="ellipsis">{{ pos.currentUser.name }}</strong>
           <small>{{ ROLES[pos.currentUser.role]?.label }}</small>
         </div>
+        <button class="icon-btn sm theme-toggle" :title="pos.settings.theme === 'dark' ? 'Light mode' : 'Dark mode'" @click="pos.settings.theme = pos.settings.theme === 'dark' ? 'light' : 'dark'">
+          <Sun v-if="pos.settings.theme === 'dark'" :size="15" /><Moon v-else :size="15" />
+        </button>
         <button class="icon-btn sm fadeable" title="Sign out" @click="signOut"><LogOut :size="15" /></button>
       </div>
     </div>
@@ -143,9 +147,12 @@ function signOut() {
 .me-text small { color: var(--muted); font-size: 11.5px; }
 .fadeable { transition: opacity .25s ease; }
 .scrim { display: none; }
+.sheet-handle { display: none; }
+.theme-toggle { display: none; }
 
+/* desktop: user can collapse to an icon rail */
 @media (min-width: 1101px) {
-  .sidebar.collapsed { width: 82px; }
+  .sidebar.collapsed { width: var(--rail-w); }
   .sidebar.collapsed .fadeable { opacity: 0; pointer-events: none; }
   .sidebar.collapsed .brand-text, .sidebar.collapsed .me-text { width: 0; }
   .sidebar.collapsed .collapse-btn svg { transform: rotate(180deg); }
@@ -153,9 +160,54 @@ function signOut() {
   .sidebar.collapsed .me { padding: 8px; justify-content: center; }
   .sidebar.collapsed .me .icon-btn { display: none; }
 }
-@media (max-width: 1100px) {
-  .sidebar { position: fixed; inset: 0 auto 0 0; transform: translateX(-105%); box-shadow: var(--shadow); background: var(--bg-2); }
-  .sidebar.open { transform: none; }
-  .scrim { display: block; position: fixed; inset: 0; z-index: 39; background: rgba(0, 0, 0, .5); backdrop-filter: blur(3px); }
+@media (min-width: 1800px) {
+  .sidebar:not(.collapsed) { width: 272px; }
+}
+
+/* tablet: always an icon rail, so the screen keeps its width */
+@media (min-width: 861px) and (max-width: 1100px) {
+  .sidebar { width: var(--rail-w); padding-top: calc(18px + var(--safe-t)); }
+  .sidebar .fadeable { opacity: 0; pointer-events: none; }
+  .sidebar .brand-text, .sidebar .me-text { width: 0; }
+  .nav-caption { height: 0; padding: 0; }
+  .nav-badge { position: absolute; top: 3px; right: 6px; min-width: 18px; height: 17px; font-size: 10px; }
+  .collapse-btn { display: none; }
+  .me { padding: 8px; justify-content: center; }
+  .me .icon-btn { display: none; }
+  .nav-link { justify-content: flex-start; }
+}
+
+/* phone: a sheet that slides up from the tab bar */
+@media (max-width: 860px) {
+  .sidebar {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 80;
+    width: 100%; max-height: calc(100dvh - 48px - var(--safe-t));
+    padding: 8px max(16px, var(--safe-r)) calc(16px + var(--safe-b)) max(16px, var(--safe-l));
+    border-right: 0; border-top: 1px solid var(--border-2); border-radius: 26px 26px 0 0;
+    background: var(--bg-2); box-shadow: 0 -24px 60px -20px rgba(0, 0, 0, .5);
+    overflow-y: auto; overscroll-behavior: contain;
+    transform: translateY(105%); visibility: hidden;
+    transition: transform .5s var(--ease), visibility 0s linear .5s;
+  }
+  .sidebar.open { transform: none; visibility: visible; transition: transform .5s var(--ease), visibility 0s; }
+  .sheet-handle { display: block; flex-shrink: 0; width: 44px; height: 5px; margin: 2px auto 12px; border-radius: 99px; background: var(--border-2); cursor: pointer; }
+  .brand { padding: 0 4px 14px; }
+  .nav-caption { padding: 2px 4px 10px; }
+  .nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; flex: none; overflow: visible; }
+  .nav-link {
+    flex-direction: column; justify-content: center; gap: 6px; height: auto; min-height: 84px; padding: 12px 6px;
+    border-radius: 18px; background: var(--surface-2); border: 1px solid var(--border);
+    font-size: 12.5px; text-align: center; white-space: normal; line-height: 1.2;
+  }
+  .nav-link.router-link-active { border-color: transparent; }
+  .nav-icon { width: auto; }
+  .nav-badge { position: absolute; top: 8px; right: 8px; margin: 0; }
+  .collapse-btn { display: none; }
+  .theme-toggle { display: inline-grid; }
+  .side-foot { margin-top: 14px; }
+  .scrim { display: block; position: fixed; inset: 0; z-index: 79; background: rgba(0, 0, 0, .5); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+}
+@media (max-width: 340px) {
+  .nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 </style>

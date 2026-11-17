@@ -1,7 +1,8 @@
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Menu, Sun, Moon, Lock, Bell, MonitorDown, Cloud, CloudOff, RefreshCw } from '@lucide/vue'
+import { Sun, Moon, Lock, Bell, MonitorDown, Cloud, CloudOff, RefreshCw } from '@lucide/vue'
+import BrandMark from './BrandMark.vue'
 import { usePos } from '@/stores/pos'
 import { useSync } from '@/stores/sync'
 import { duration } from '@/utils/format'
@@ -12,7 +13,6 @@ async function install() {
   if (await installApp()) toast('Maynex POS is installed. Open it from your home screen or app list.')
 }
 
-const emit = defineEmits(['menu'])
 const pos = usePos()
 const route = useRoute()
 const router = useRouter()
@@ -46,7 +46,7 @@ function lock() {
 
 <template>
   <header class="topbar">
-    <button class="icon-btn menu" aria-label="Open menu" @click="emit('menu')"><Menu :size="18" /></button>
+    <span class="phone-brand"><BrandMark :size="32" /></span>
     <div class="title">
       <Transition name="title" mode="out-in">
         <h2 :key="route.name">{{ route.meta.title }}</h2>
@@ -71,24 +71,28 @@ function lock() {
         <CloudOff v-else-if="sync.status === 'error' || sync.status === 'signed-out'" :size="17" />
         <Cloud v-else :size="17" />
       </button>
-      <button class="icon-btn" :title="pos.settings.theme === 'dark' ? 'Light mode' : 'Dark mode'" @click="toggleTheme">
+      <button class="icon-btn theme-btn" :title="pos.settings.theme === 'dark' ? 'Light mode' : 'Dark mode'" @click="toggleTheme">
         <Transition name="spin" mode="out-in">
           <Sun v-if="pos.settings.theme === 'dark'" key="sun" :size="17" />
           <Moon v-else key="moon" :size="17" />
         </Transition>
       </button>
       <div class="clock mono hide-sm">{{ timeLabel }}</div>
-      <button class="btn btn-sm" title="Lock & switch user" @click="lock"><Lock :size="15" /><span class="hide-sm">Lock</span></button>
+      <button class="btn btn-sm lock" title="Lock & switch user" aria-label="Lock & switch user" @click="lock"><Lock :size="15" /><span class="hide-sm">Lock</span></button>
     </div>
   </header>
 </template>
 
 <style scoped>
-.topbar { display: flex; align-items: center; gap: 14px; padding: 18px 28px 14px; min-height: 76px; }
-.menu { display: none; }
+.topbar {
+  display: flex; align-items: center; gap: 14px;
+  padding: calc(clamp(10px, 1.5vw, 18px) + var(--safe-t)) var(--gutter) clamp(8px, 1.2vw, 14px);
+  min-height: calc(clamp(60px, 6vw, 76px) + var(--safe-t));
+}
+.phone-brand { display: none; }
 .title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.title h2 { font-size: 15px; font-weight: 750; color: var(--text-2); letter-spacing: 0; }
-.actions { display: flex; align-items: center; gap: 10px; }
+.title h2 { font-size: 15px; font-weight: 750; color: var(--text-2); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.actions { display: flex; align-items: center; gap: clamp(6px, 1vw, 10px); }
 .shift-pill {
   display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border-radius: 99px;
   font-size: 12.5px; font-weight: 650; color: var(--text-2);
@@ -117,9 +121,22 @@ function lock() {
 .spin-leave-to { opacity: 0; transform: rotate(120deg) scale(.4); }
 
 @media (max-width: 1100px) {
-  .menu { display: inline-grid; }
+  .clock { display: none; }
 }
 @media (max-width: 860px) {
-  .topbar { padding: 14px 16px 10px; min-height: 64px; }
+  .topbar { gap: 10px; }
+  .phone-brand { display: block; flex-shrink: 0; }
+  .title h2 { font-size: 19px; font-weight: 800; color: var(--text); letter-spacing: -.02em; }
+  .lock { --h: 40px; width: var(--h); padding: 0; border-radius: 12px; }
+  .actions .icon-btn { width: 40px; height: 40px; border-radius: 12px; }
+  .theme-btn { display: none; } /* lives in the More sheet on phones */
+}
+@media (max-width: 380px) {
+  .phone-brand { display: none; }
+  .actions { gap: 4px; }
+}
+/* short landscape screens: slimmer bar */
+@media (max-height: 520px) and (orientation: landscape) {
+  .topbar { min-height: 52px; padding-top: calc(8px + var(--safe-t)); padding-bottom: 6px; }
 }
 </style>

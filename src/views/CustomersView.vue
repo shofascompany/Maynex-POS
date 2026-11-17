@@ -209,7 +209,7 @@ async function remove(c) {
 </template>
 
 <style scoped>
-.cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: clamp(10px, 1.2vw, 14px); }
 .ccard { display: flex; flex-direction: column; gap: 14px; padding: 18px; text-align: left; cursor: pointer; font: inherit; color: inherit; transition: transform .4s var(--ease), border-color .3s, box-shadow .4s; overflow: hidden; }
 .ccard::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--tier); opacity: .7; }
 .ccard:hover { transform: translateY(-4px); border-color: var(--border-2); box-shadow: 0 24px 40px -24px rgba(0, 0, 0, .5); }

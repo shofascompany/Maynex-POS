@@ -55,14 +55,50 @@ function stockState(p) {
   return 'ok'
 }
 
+// below this width the cart is a drawer / sheet and the checkout bar is shown
+const COMPACT = 980
+const PHONE = 860
+function buzz(ms = 8) {
+  try {
+    navigator.vibrate?.(ms)
+  } catch {
+    // not supported
+  }
+}
+
 function add(p, ev) {
   const r = pos.addToCart(p)
-  if (!r.ok) return toast(r.message, 'warning')
+  if (!r.ok) {
+    buzz([20, 40, 20])
+    return toast(r.message, 'warning')
+  }
+  buzz()
   if (ev?.currentTarget) fly(catColor(p), ev.currentTarget)
 }
+
+/* phone cart sheet: drag the handle down to close it */
+const dragY = ref(0)
+let dragStartY = null
+function dragStart(e) {
+  if (window.innerWidth > PHONE) return
+  dragStartY = e.clientY
+  e.currentTarget.setPointerCapture?.(e.pointerId)
+}
+function dragMove(e) {
+  if (dragStartY === null) return
+  dragY.value = Math.max(0, e.clientY - dragStartY)
+}
+function dragEnd() {
+  if (dragStartY === null) return
+  if (dragY.value > 110) cartOpen.value = false
+  dragStartY = null
+  dragY.value = 0
+}
+const sheetStyle = computed(() => (dragY.value ? { transform: `translateY(${dragY.value}px)`, transition: 'none' } : undefined))
+
 // Small dot that travels from the tapped tile to the cart.
 function fly(color, src) {
-  const target = window.innerWidth <= 1100 ? fabEl.value : cartEl.value
+  const target = window.innerWidth <= COMPACT ? fabEl.value : cartEl.value
   if (!target || !src.getBoundingClientRect || !document.body.animate) return
   const s = src.getBoundingClientRect()
   const t = target.getBoundingClientRect()
@@ -73,7 +109,7 @@ function fly(color, src) {
   const x0 = s.left + s.width / 2 - 20
   const y0 = s.top + s.height / 2 - 20
   const x1 = t.left + t.width / 2 - 20
-  const y1 = window.innerWidth <= 1100 ? t.top : t.top + 120
+  const y1 = window.innerWidth <= COMPACT ? t.top : t.top + 120
   const anim = el.animate(
     [
       { transform: `translate(${x0}px, ${y0}px) scale(1)`, opacity: 1 },
@@ -229,9 +265,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <section class="catalog">
       <div class="search input-icon">
         <Search :size="18" />
-        <input ref="searchEl" v-model="query" class="input input-lg" placeholder="Search products, or scan a barcode and press Enter…" @keydown.enter.prevent="onSearchEnter" />
+        <input ref="searchEl" v-model="query" class="input input-lg" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search products or scan a barcode…" @keydown.enter.prevent="onSearchEnter" />
         <button v-if="query" class="icon-btn xs clear" aria-label="Clear search" @click="query = ''"><X :size="13" /></button>
-        <span v-else class="scan-hint hide-sm"><ScanBarcode :size="15" /><kbd>/</kbd></span>
+        <span v-else class="scan-hint hide-sm hide-touch"><ScanBarcode :size="15" /><kbd>/</kbd></span>
       </div>
 
       <div class="chips-row">
@@ -278,9 +314,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     </section>
 
     <Transition name="fade"><div v-if="cartOpen" class="cart-scrim" @click="cartOpen = false"></div></Transition>
-    <aside ref="cartEl" class="cart card" :class="{ open: cartOpen }">
+    <aside ref="cartEl" class="cart card" :class="{ open: cartOpen }" :style="sheetStyle">
+      <div class="grab" @pointerdown="dragStart" @pointermove="dragMove" @pointerup="dragEnd" @pointercancel="dragEnd">
+        <span class="handle"></span>
+      </div>
       <header class="cart-head">
-        <div>
+        <div class="grab-title" @pointerdown="dragStart" @pointermove="dragMove" @pointerup="dragEnd" @pointercancel="dragEnd">
           <h3>Current sale</h3>
           <span class="muted small mono">Order #{{ pos.counters.order + 1 }}</span>
         </div>
@@ -334,7 +373,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <div class="bag"><ShoppingBag :size="30" /></div>
           <strong>Cart is empty</strong>
           <span class="muted small">Tap a product or scan a barcode to start.</span>
-          <div class="shortcuts muted tiny">
+          <div class="shortcuts muted tiny hide-touch">
             <span><kbd>/</kbd> search</span><span><kbd>F2</kbd> pay</span><span><kbd>F4</kbd> park</span>
           </div>
         </div>
@@ -359,14 +398,27 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <div class="sum total"><span>Total</span><AnimatedNumber :value="totals.total" :format="money" :duration="450" /></div>
         </div>
         <button class="btn btn-primary btn-xl charge" :disabled="!hasItems || needShift" @click="openPay">
-          <Wallet :size="20" /> Charge {{ money(totals.total) }} <kbd class="hide-sm">F2</kbd>
+          <Wallet :size="20" /> Charge {{ money(totals.total) }} <kbd class="hide-sm hide-touch">F2</kbd>
         </button>
       </footer>
     </aside>
 
-    <button ref="fabEl" class="cart-fab btn btn-primary btn-lg" @click="cartOpen = true">
-      <ShoppingBag :size="18" /> {{ pos.cartCount }} item{{ pos.cartCount === 1 ? '' : 's' }} · {{ money(totals.total) }}
-    </button>
+    <!-- compact screens: checkout bar in place of the side cart -->
+    <Transition name="bar">
+      <div v-if="!needShift" ref="fabEl" class="cart-bar" :class="{ empty: !hasItems }">
+        <button class="cb-cart" :aria-label="`Open cart, ${pos.cartCount} items`" @click="cartOpen = true">
+          <span class="cb-ico">
+            <ShoppingBag :size="20" />
+            <Transition name="pop"><span v-if="pos.cartCount" :key="pos.cartCount" class="cb-count">{{ pos.cartCount }}</span></Transition>
+          </span>
+          <span class="cb-text">
+            <AnimatedNumber class="cb-total num" :value="totals.total" :format="money" :duration="350" />
+            <small>{{ hasItems ? `${pos.cartCount} item${pos.cartCount === 1 ? '' : 's'} · View cart` : 'Tap a product to start' }}</small>
+          </span>
+        </button>
+        <button class="btn btn-primary cb-pay" :disabled="!hasItems" @click="openPay"><Wallet :size="18" /> Charge</button>
+      </div>
+    </Transition>
 
     <Transition name="fade">
       <div v-if="needShift" class="gate">
@@ -487,7 +539,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </template>
 
 <style scoped>
-.register { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 410px; gap: 20px; height: 100%; max-width: 1640px; margin: 0 auto; }
+.register { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) clamp(330px, 30vw, 440px); gap: clamp(14px, 1.6vw, 22px); height: 100%; max-width: 1760px; margin: 0 auto; }
+.search .input::-webkit-search-cancel-button { display: none; }
+.search > svg { z-index: 1; }
+/* the cart lays its lines out by its own width, not the screen's */
+.cart { container-type: inline-size; }
+@container (max-width: 400px) {
+  .cart .line { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'main main' 'step total'; row-gap: 8px; padding: 10px; }
+  .cart .line-main { grid-area: main; }
+  .cart .stepper { grid-area: step; justify-self: start; }
+  .cart .line-total { grid-area: total; font-size: 14.5px; }
+}
 
 /* catalog */
 .catalog { display: flex; flex-direction: column; min-height: 0; gap: 14px; }
@@ -498,7 +560,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .chips-row { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; margin: -2px; scrollbar-width: none; }
 .chips-row::-webkit-scrollbar { display: none; }
 .tiles-scroll { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -8px; padding: 6px 8px 24px; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(132px, 11vw, 176px), 1fr)); gap: clamp(10px, 1.1vw, 16px); }
 .tile {
   position: relative; overflow: hidden; isolation: isolate;
   display: flex; flex-direction: column; align-items: flex-start; gap: 9px; min-height: 160px; padding: 14px;
@@ -527,7 +589,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   transition: transform .5s var(--spring);
 }
 .tile:hover .tile-icon { transform: scale(1.12) rotate(-7deg); }
-.tile-name { font-weight: 700; font-size: 14px; line-height: 1.25; }
+.tile-name { font-weight: 700; font-size: 14px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .tile-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 6px; }
 .tile-price { font-weight: 800; font-size: 15px; letter-spacing: -.01em; }
 .tile-stock { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; }
@@ -603,8 +665,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .charge kbd { background: rgba(255, 255, 255, .2); color: #fff; border-color: rgba(255, 255, 255, .3); margin-left: 4px; }
 .charge:not(:disabled) { animation: chargeGlow 3s ease-in-out infinite; }
 @keyframes chargeGlow { 0%, 100% { box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--c1) 85%, transparent); } 50% { box-shadow: 0 16px 36px -10px color-mix(in srgb, var(--c3) 85%, transparent); } }
-.cart-fab { display: none; }
+.cart-bar { display: none; }
 .cart-scrim { display: none; }
+.grab { display: none; }
 
 /* gate */
 .gate { position: absolute; inset: -6px -8px; z-index: 20; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(10px); border-radius: 24px; }
@@ -636,20 +699,108 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .receipt-wrap { margin-top: 16px; width: 100%; animation: receiptIn .9s .3s var(--ease) both; }
 @keyframes receiptIn { from { opacity: 0; transform: translateY(-30px); clip-path: inset(0 0 100% 0); } to { opacity: 1; transform: none; clip-path: inset(0 0 -20px 0); } }
 
-@media (max-width: 1100px) {
-  .register { grid-template-columns: 1fr; }
+/* short screens (landscape tablets / laptops): keep the cart lines visible */
+@media (max-height: 700px) and (min-width: 981px) {
+  .cart-head { padding: 12px 16px 8px; }
+  .qa { flex-direction: row; justify-content: center; padding: 7px 4px; }
+  .qa span { display: none; }
+  .cart-foot { gap: 8px; padding: 10px 14px 12px; }
+  .sum.total { font-size: 19px; }
+  .charge { --h: 50px; }
+  .tile { min-height: 132px; }
+  .tile-icon { width: 46px; height: 46px; border-radius: 14px; }
+}
+
+/* compact screens: cart becomes a drawer, checkout bar at the bottom */
+@media (max-width: 980px) {
+  .register { grid-template-columns: minmax(0, 1fr); }
   .cart {
-    position: fixed; top: 0; right: 0; bottom: 0; z-index: 60; width: min(430px, 100%);
-    border-radius: 24px 0 0 24px; transform: translateX(105%); transition: transform .5s var(--ease); background: var(--bg-2);
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 70; width: min(440px, 100%);
+    padding-top: var(--safe-t); padding-bottom: var(--safe-b);
+    border-radius: 24px 0 0 24px; transform: translateX(105%); visibility: hidden;
+    transition: transform .5s var(--ease), visibility 0s linear .5s; background: var(--bg-2);
+  }
+  .cart.open { transform: none; visibility: visible; transition: transform .5s var(--ease), visibility 0s; }
+  .close-cart { display: inline-grid; }
+  .cart-scrim { display: block; position: fixed; inset: 0; z-index: 69; background: rgba(0, 0, 0, .5); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+  .tiles-scroll { padding-bottom: 96px; }
+
+  .cart-bar {
+    position: fixed; z-index: 45; display: flex; align-items: center; gap: 10px;
+    left: calc(var(--rail-w) + var(--gutter) + var(--safe-l)); right: calc(var(--gutter) + var(--safe-r));
+    bottom: calc(var(--tabbar-space) + 12px);
+    margin: 0 auto; max-width: 640px; padding: 8px 8px 8px 10px; border-radius: 22px;
+    background: color-mix(in srgb, var(--bg-2) 88%, transparent); border: 1px solid var(--border-2);
+    box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .55), 0 0 0 1px color-mix(in srgb, var(--c1) 12%, transparent);
+    backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+  }
+  .cb-cart { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 4px; border: 0; background: none; cursor: pointer; text-align: left; border-radius: 16px; }
+  .cb-ico {
+    position: relative; flex-shrink: 0; width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center;
+    color: var(--accent-ink); background: var(--grad-soft); border: 1px solid var(--border);
+  }
+  .cb-count {
+    position: absolute; top: -6px; right: -6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 99px;
+    display: grid; place-items: center; font-size: 11.5px; font-weight: 800; color: #fff; background: var(--grad);
+    box-shadow: 0 0 0 2px var(--bg-2);
+  }
+  .cb-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+  .cb-total { font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+  .cb-text small { color: var(--muted); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cb-pay { --h: 52px; padding: 0 22px; border-radius: 16px; font-size: 15px; flex-shrink: 0; }
+  .cart-bar.empty .cb-total { color: var(--muted); }
+  .bar-enter-active, .bar-leave-active { transition: transform .45s var(--spring), opacity .25s; }
+  .bar-enter-from, .bar-leave-to { transform: translateY(30px); opacity: 0; }
+}
+
+/* phones: full-width sheet that slides up, swipe down to close */
+@media (max-width: 860px) {
+  .catalog { gap: 10px; }
+  .search .input { height: 46px; border-radius: 14px; }
+  .chips-row { margin: -2px calc(-1 * var(--gutter)); padding: 2px var(--gutter) 4px; }
+  .chips-row .chip { height: 36px; }
+  .tiles-scroll { margin: 0 calc(-1 * var(--gutter)); padding: 4px var(--gutter) 100px; }
+
+  .cart-bar { left: calc(10px + var(--safe-l)); right: calc(10px + var(--safe-r)); bottom: calc(var(--tabbar-space) + 10px); }
+
+  .cart {
+    top: auto; left: 0; width: 100%; height: calc(100dvh - 40px - var(--safe-t)); max-height: 820px;
+    padding-top: 0; border-radius: 26px 26px 0 0; border-bottom: 0;
+    transform: translateY(105%); box-shadow: 0 -24px 60px -20px rgba(0, 0, 0, .55);
   }
   .cart.open { transform: none; }
-  .close-cart { display: inline-grid; }
-  .cart-scrim { display: block; position: fixed; inset: 0; z-index: 59; background: rgba(0, 0, 0, .5); backdrop-filter: blur(3px); }
-  .cart-fab { display: inline-flex; position: fixed; right: 18px; bottom: 18px; z-index: 30; border-radius: 99px; }
-  .tiles-scroll { padding-bottom: 90px; }
+  .grab { display: grid; place-items: center; height: 22px; flex-shrink: 0; touch-action: none; cursor: grab; }
+  .handle { width: 44px; height: 5px; border-radius: 99px; background: var(--border-2); }
+  .grab-title { touch-action: none; }
+  .cart-head { padding: 4px 16px 10px; }
+  .customer { margin: 0 12px 6px; }
+  .lines { padding: 4px 8px; }
+  .cart-foot { padding: 12px 14px calc(14px + var(--safe-b)); }
 }
 @media (max-width: 600px) {
-  .tiles { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
-  .tile { min-height: 140px; padding: 12px; }
+  .tiles { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+  .tile { min-height: 124px; padding: 11px; gap: 7px; border-radius: 18px; }
+  .tile-icon { width: 42px; height: 42px; border-radius: 13px; }
+  .tile-icon :deep(svg) { width: 21px; height: 21px; }
+  .tile-name { font-size: 13px; }
+  .tile-price { font-size: 14px; }
+  .tile-stock { font-size: 10.5px; }
+  .tile-qty { top: 8px; right: 8px; min-width: 24px; height: 24px; font-size: 12px; }
+  .tile-foot { flex-direction: column; align-items: flex-start; gap: 0; }
+}
+
+/* touch: bigger steppers, no hover lifts */
+@media (pointer: coarse) {
+  .stepper button { width: 34px; height: 34px; border-radius: 9px; }
+  .stepper span { min-width: 26px; font-size: 14px; }
+  .qa { padding: 10px 4px; }
+}
+@media (hover: none) {
+  .tile:hover { transform: none; box-shadow: none; border-color: var(--border); }
+  .tile:hover .tile-icon { transform: none; }
+  .tile:hover::after { transform: translateX(-100%); }
+  .tile:active { transform: scale(.95); border-color: color-mix(in srgb, var(--cat) 55%, transparent); }
+  .stepper button:hover { background: transparent; color: var(--text-2); }
+  .stepper button:active { background: var(--grad); color: #fff; }
 }
 </style>

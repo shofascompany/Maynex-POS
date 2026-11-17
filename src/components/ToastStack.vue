@@ -41,8 +41,11 @@ const icons = { success: CircleCheck, warning: TriangleAlert, error: CircleX, in
 .toast-enter-from { opacity: 0; transform: translateX(60px) scale(.9); }
 .toast-leave-to { opacity: 0; transform: translateX(40px); }
 .toast-move { transition: transform .4s var(--ease); }
-@media (max-width: 600px) {
-  .toasts { left: 16px; right: 16px; align-items: stretch; }
-  .toast { max-width: none; }
+/* phones: drop in from the top, clear of the notch, the tab bar and the cart bar */
+@media (max-width: 860px) {
+  .toasts { top: calc(10px + var(--safe-t)); bottom: auto; left: 12px; right: 12px; align-items: center; flex-direction: column-reverse; }
+  .toast { width: 100%; max-width: 440px; min-width: 0; }
+  .toast-enter-from { transform: translateY(-40px) scale(.94); }
+  .toast-leave-to { transform: translateY(-24px); }
 }
 </style>

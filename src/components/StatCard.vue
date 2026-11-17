@@ -53,4 +53,14 @@ const good = computed(() => (props.invert ? props.delta <= 0 : props.delta >= 0)
 .delta { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 750; flex-shrink: 0; }
 .delta.up { color: var(--success); background: color-mix(in srgb, var(--success) 15%, transparent); }
 .delta.down { color: var(--danger); background: color-mix(in srgb, var(--danger) 15%, transparent); }
+@media (max-width: 640px) {
+  .stat { padding: 14px; }
+  .ico { width: 30px; height: 30px; border-radius: 10px; }
+  .label { font-size: 12px; }
+  .value { font-size: clamp(19px, 5.6vw, 26px); margin: 8px 0 6px; overflow-wrap: anywhere; }
+  .foot { flex-wrap: wrap; gap: 4px 6px; }
+}
+@media (hover: none) {
+  .stat:hover { transform: none; }
+}
 </style>

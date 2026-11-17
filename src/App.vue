@@ -7,6 +7,7 @@ import { useSync } from '@/stores/sync'
 import { useUi, toast } from '@/composables'
 import AppSidebar from '@/components/AppSidebar.vue'
 import AppTopbar from '@/components/AppTopbar.vue'
+import MobileTabBar from '@/components/MobileTabBar.vue'
 import ToastStack from '@/components/ToastStack.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import BaseModal from '@/components/BaseModal.vue'
@@ -16,6 +17,9 @@ const ui = useUi()
 const route = useRoute()
 const router = useRouter()
 const mobileNav = ref(false)
+
+// the phone "More" sheet closes whenever the screen changes
+watch(() => route.fullPath, () => (mobileNav.value = false))
 
 // Connects this device's business to the server (does nothing until the server is configured).
 const sync = useSync()
@@ -108,8 +112,9 @@ async function savePassword() {
 
   <div v-else class="shell" :class="{ collapsed: ui.collapsed }">
     <AppSidebar v-model:open="mobileNav" />
+    <MobileTabBar :more-open="mobileNav" @more="mobileNav = !mobileNav" />
     <main class="main">
-      <AppTopbar @menu="mobileNav = true" />
+      <AppTopbar />
       <div class="content" :class="{ full: route.meta.full }">
         <RouterView v-slot="{ Component, route: r }">
           <Transition name="page" mode="out-in">
@@ -135,7 +140,7 @@ async function savePassword() {
 
 <style scoped>
 .notice {
-  position: fixed; z-index: 90; top: 12px; left: 50%; translate: -50% 0; max-width: min(720px, calc(100% - 32px));
+  position: fixed; z-index: 90; top: calc(12px + var(--safe-t)); left: 50%; translate: -50% 0; max-width: min(720px, calc(100% - 32px));
   display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; border-radius: 14px;
   font-size: 13.5px; font-weight: 600; background: var(--bg-2); border: 1px solid var(--border-2); box-shadow: var(--shadow);
 }

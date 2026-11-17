@@ -311,8 +311,16 @@ async function wipe() {
 @media (max-width: 700px) { .sync-grid { grid-template-columns: 1fr; } }
 @media (max-width: 1000px) {
   .layout { grid-template-columns: 1fr; }
-  .side { position: static; flex-direction: row; overflow-x: auto; }
-  .side button { white-space: nowrap; }
+  .side { position: sticky; top: 0; z-index: 5; flex-direction: row; overflow-x: auto; scrollbar-width: none; background: var(--bg-2); }
+  .side::-webkit-scrollbar { display: none; }
+  .side button { white-space: nowrap; flex-shrink: 0; }
   .receipt-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .data-actions { grid-template-columns: 1fr 1fr; }
+  .accents { gap: 10px; }
+  .accent .swatch { width: 56px; height: 56px; border-radius: 18px; }
+  .theme { height: 64px; }
+  .sec-head { gap: 12px; margin-bottom: 14px; }
 }
 </style>

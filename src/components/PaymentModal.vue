@@ -214,8 +214,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .tender { width: 100%; }
 
 @media (max-width: 760px) {
-  .pay { grid-template-columns: 1fr; }
-  .due strong { font-size: 32px; }
-  .key { height: 46px; }
+  .pay { grid-template-columns: 1fr; gap: 14px; }
+  .left { padding: 14px 16px; gap: 8px; border-radius: 18px; }
+  .due strong { font-size: clamp(28px, 9vw, 36px); }
+  .method { padding: 12px 6px; }
+  .amount strong { font-size: 26px; }
+  .key { height: 54px; font-size: 21px; }
+  .quick { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .quick.hidden { display: none; }
+}
+@media (hover: none) {
+  .method:hover { transform: none; }
+  .key:hover { background: var(--surface); border-color: var(--border); }
 }
 </style>

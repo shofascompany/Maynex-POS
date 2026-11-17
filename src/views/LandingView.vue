@@ -201,9 +201,47 @@ const verticals = [
   { icon: Smartphone, label: 'Pop-ups' }, { icon: Package, label: 'Market stalls' },
 ]
 
+/* Phone: sticky call-to-action once the hero is scrolled past, hidden again at the closing CTA */
+const heroEl = ref(null)
+const ctaEl = ref(null)
+const heroGone = ref(false)
+const ctaInView = ref(false)
+const showBar = computed(() => heroGone.value && !ctaInView.value && !menuOpen.value)
+let barIo
+
+/* Phone: feature cards swipe sideways, with dots showing where you are */
+const bentoEl = ref(null)
+const featIndex = ref(0)
+const FEAT_COUNT = 7
+function onBentoScroll() {
+  const el = bentoEl.value
+  if (!el) return
+  const card = el.firstElementChild
+  const step = card ? card.getBoundingClientRect().width + 12 : el.clientWidth
+  featIndex.value = Math.min(FEAT_COUNT - 1, Math.round(el.scrollLeft / step))
+}
+function goFeat(i) {
+  const card = bentoEl.value?.children[i]
+  if (card) bentoEl.value.scrollTo({ left: card.offsetLeft - bentoEl.value.offsetLeft - 16, behavior: reduce ? 'auto' : 'smooth' })
+}
+
+// close the phone menu with Escape
+function onKey(e) {
+  if (e.key === 'Escape') menuOpen.value = false
+}
+
 onMounted(() => {
+  window.addEventListener('keydown', onKey)
   navIo = new IntersectionObserver(([e]) => (scrolled.value = !e.isIntersecting))
   if (sentinel.value) navIo.observe(sentinel.value)
+  barIo = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.target === heroEl.value) heroGone.value = !e.isIntersecting
+      else ctaInView.value = e.isIntersecting
+    }
+  }, { rootMargin: '-35% 0px 0px 0px' })
+  if (heroEl.value) barIo.observe(heroEl.value)
+  if (ctaEl.value) barIo.observe(ctaEl.value)
   if (reduce) {
     ;[0, 1, 0, 2].forEach(addToCart)
     pressed.value = -1
@@ -215,6 +253,8 @@ onBeforeUnmount(() => {
   cancelAnimationFrame(raf)
   io.disconnect()
   navIo?.disconnect()
+  barIo?.disconnect()
+  window.removeEventListener('keydown', onKey)
 })
 
 const money = (n) => `$${n.toFixed(2)}`
@@ -251,14 +291,26 @@ const year = new Date().getFullYear()
       </div>
       <Transition name="drop">
         <div v-if="menuOpen" class="mobile-menu">
-          <button v-for="l in links" :key="l.id" @click="go(l.id)">{{ l.label }}<ArrowRight :size="15" /></button>
-          <button v-if="canInstall" class="btn btn-block" @click="install"><MonitorDown :size="15" /> Install app</button>
-          <button class="btn btn-soft btn-block" @click="start">{{ pos.signedIn ? 'Open app' : 'Get started' }}</button><button class="btn btn-block" @click="signIn">Sign in</button>
+          <button v-for="l in links" :key="l.id" class="mm-link" @click="go(l.id)">{{ l.label }}<ArrowRight :size="16" /></button>
+          <button class="mm-link" @click="go('install')">Install the app<ArrowRight :size="16" /></button>
+          <div class="mm-actions">
+            <button class="btn btn-primary btn-lg btn-block" @click="start">{{ ctaLabel }} <ArrowRight :size="16" /></button>
+            <button class="btn btn-lg btn-block" @click="signIn">Sign in</button>
+            <button v-if="canInstall" class="btn btn-ghost btn-block" @click="install"><MonitorDown :size="15" /> Install app</button>
+          </div>
         </div>
       </Transition>
     </header>
+    <Transition name="fade"><div v-if="menuOpen" class="menu-scrim" @click="menuOpen = false"></div></Transition>
 
-    <section id="top" class="hero" @pointermove="onHeroMove" @pointerleave="resetTilt">
+    <Transition name="bar">
+      <div v-if="showBar" class="mobile-cta">
+        <button class="btn btn-primary btn-lg" @click="start">{{ ctaLabel }} <ArrowRight :size="17" /></button>
+        <button class="btn btn-lg" @click="signIn">Sign in</button>
+      </div>
+    </Transition>
+
+    <section id="top" ref="heroEl" class="hero" @pointermove="onHeroMove" @pointerleave="resetTilt">
       <div class="wrap hero-grid">
         <div class="hero-copy">
           <span class="pill rise" style="--i: 0">
@@ -358,7 +410,7 @@ const year = new Date().getFullYear()
         <p>Stop juggling a till, a stock spreadsheet and a loyalty punch card. Maynex POS does all of it, and it's a joy to use.</p>
       </div>
 
-      <div class="bento">
+      <div ref="bentoEl" class="bento" @scroll.passive="onBentoScroll">
         <article v-reveal="0" class="feat span-2" @pointermove="spot">
           <div class="feat-ic"><Zap :size="20" /></div>
           <h3>A register built for the rush</h3>
@@ -427,6 +479,9 @@ const year = new Date().getFullYear()
           <div class="v-lock"><Lock :size="15" /> Manager approval</div>
         </article>
       </div>
+      <div class="feat-dots" role="tablist" aria-label="Features">
+        <button v-for="i in FEAT_COUNT" :key="i" :class="{ on: featIndex === i - 1 }" :aria-label="`Feature ${i}`" @click="goFeat(i - 1)"></button>
+      </div>
     </section>
 
     <section id="how" class="wrap section">
@@ -438,18 +493,24 @@ const year = new Date().getFullYear()
         <div class="steps-line" aria-hidden="true"><span></span></div>
         <div class="step" style="--i: 0">
           <span class="step-n">1</span>
-          <h3>Create your shop</h3>
-          <p>Add your store name, currency and tax, and pick your admin PIN.</p>
+          <div class="step-text">
+            <h3>Create your shop</h3>
+            <p>Add your store name, currency and tax, and pick your admin PIN.</p>
+          </div>
         </div>
         <div class="step" style="--i: 1">
           <span class="step-n">2</span>
-          <h3>Add your products</h3>
-          <p>Add each item with its price, cost, barcode, category and opening stock.</p>
+          <div class="step-text">
+            <h3>Add your products</h3>
+            <p>Add each item with its price, cost, barcode, category and opening stock.</p>
+          </div>
         </div>
         <div class="step" style="--i: 2">
           <span class="step-n">3</span>
-          <h3>Start selling</h3>
-          <p>Open a shift, ring up sales and record cash, card, mobile or split payments.</p>
+          <div class="step-text">
+            <h3>Start selling</h3>
+            <p>Open a shift, ring up sales and record cash, card, mobile or split payments.</p>
+          </div>
         </div>
       </div>
     </section>
@@ -516,7 +577,7 @@ const year = new Date().getFullYear()
     </section>
 
     <section class="wrap section">
-      <div v-reveal class="cta">
+      <div ref="ctaEl" v-reveal class="cta">
         <div class="cta-orb" aria-hidden="true"></div>
         <BrandMark :size="56" />
         <h2>Ready to make checkout the easy part?</h2>
@@ -783,7 +844,30 @@ const year = new Date().getFullYear()
 .foot-cols button:hover { color: var(--text); }
 .foot-bottom { grid-column: 1 / -1; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); }
 
-/* Responsive */
+/* Phone-only pieces (hidden on larger screens) */
+.mobile-cta, .menu-scrim, .feat-dots { display: none; }
+
+/* Responsive
+   ≥1600 wide: wider page, larger type
+   ≤1020 tablet: hero and showcase stack
+   ≤760  phone: burger menu, swipeable features, timeline steps, sticky CTA */
+.nav-row { flex-wrap: nowrap; }
+.hero-grid > *, .showcase > * { min-width: 0; }
+
+@media (min-width: 1600px) {
+  .landing { font-size: 16px; }
+  .wrap { width: min(1360px, 100% - 80px); }
+  .hero-title { font-size: clamp(70px, 3.5vw, 82px); }
+  .hero-grid { grid-template-columns: 1fr 1.05fr; }
+  .hero-sub { font-size: 20px; max-width: 600px; }
+  .sec-head { max-width: 820px; }
+  .sec-head h2, .show-copy h2, .cta h2 { font-size: clamp(50px, 3.2vw, 62px); }
+  .feat { padding: 32px; }
+  .feat h3 { font-size: 20px; }
+  .feat p { font-size: 15.5px; }
+  .bento { gap: 20px; }
+  .mock-body { padding: 20px; gap: 18px; }
+}
 @media (max-width: 1020px) {
   .hero-grid, .showcase { grid-template-columns: 1fr; }
   .hero-copy { text-align: center; }
@@ -791,31 +875,154 @@ const year = new Date().getFullYear()
   .hero-actions, .hero-proof { justify-content: center; }
   .hero-stage { max-width: 620px; margin: 30px auto 0; width: 100%; }
   .bento { grid-template-columns: 1fr 1fr; }
+  .f2 { left: -14px; bottom: 6%; }
+  .show-copy { text-align: center; }
+  .ticks { justify-content: center; max-width: 520px; margin-inline: auto; text-align: left; }
 }
 @media (max-width: 760px) {
+  .landing { font-size: 15px; }
   .nav-links, .hide-sm { display: none; }
   .burger { display: grid; }
-  .wrap { width: calc(100% - 32px); }
-  .stats { grid-template-columns: 1fr 1fr; }
-  .bento { grid-template-columns: 1fr; }
+  .wrap { width: calc(100% - 32px - var(--safe-l) - var(--safe-r)); }
+  .nav { padding-top: var(--safe-t); }
+  .nav-row { height: 62px; gap: 10px; }
+  .logo { min-width: 0; flex-shrink: 1; }
+  .nav-cta { margin-left: auto; gap: 6px; }
+
+  /* menu: full-width panel under the bar */
+  .mobile-menu {
+    position: absolute; left: 0; right: 0; top: 100%;
+    padding: 6px 16px calc(18px + var(--safe-b)); gap: 0;
+    background: var(--bg); border-bottom: 1px solid var(--border); box-shadow: 0 30px 50px -30px rgba(0, 0, 0, .45);
+    max-height: calc(100dvh - 62px - var(--safe-t)); overflow-y: auto;
+  }
+  .mm-link { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 56px; background: none; border: 0; border-bottom: 1px solid var(--border); padding: 0 4px; font: 700 17px var(--font); color: var(--text); cursor: pointer; }
+  .mm-link svg { color: var(--muted); }
+  .mm-actions { display: grid; gap: 10px; margin-top: 18px; }
+  .mobile-menu .btn { margin-top: 0; }
+  .menu-scrim { display: block; position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, .35); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+
+  /* hero */
+  .hero { padding: 26px 0 40px; }
+  .pill { font-size: 12px; max-width: 100%; }
+  .hero-title { font-size: clamp(36px, 10.6vw, 56px); margin: 18px 0 16px; letter-spacing: -.04em; }
+  .hero-sub { font-size: 16px; }
+  .hero-actions { margin-top: 24px; }
+  .hero-actions .btn { flex: 1 1 220px; }
+  .hero-proof { gap: 8px; margin-top: 20px; }
+  .hero-proof li { padding: 6px 11px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border); font-size: 12.5px; color: var(--text-2); }
+  .scroll-cue { display: none; }
+  .hero-stage { margin-top: 24px; }
+  .float { display: none; }
+  .mock { border-radius: 22px; }
+  .mock-bar { padding: 10px 14px; }
+  .mock-body { grid-template-columns: 1fr; padding: 12px; gap: 10px; }
+  .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .tile { padding: 10px; border-radius: 12px; }
+  .tile-ic { width: 28px; height: 28px; margin-bottom: 4px; }
+  .tile b { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile small { font-size: 10.5px; }
+  .ticket { min-height: 0; padding: 12px; }
+  .lines { min-height: 64px; }
+
+  /* band + stats */
+  .band { padding-top: 34px; }
+  .band-label { padding-inline: 20px; }
+  .track { animation-duration: 28s; }
+  .mq { padding: 9px 16px; font-size: 14px; }
+  .stats { grid-template-columns: 1fr 1fr; margin-top: 36px; border-radius: 22px; }
+  .stat { padding: 20px 14px; }
+  .stat span { font-size: 12.5px; display: block; line-height: 1.4; }
+
+  /* section heads */
+  .section { padding-top: 64px; scroll-margin-top: 62px; }
+  .sec-head { margin-bottom: 28px; }
+  .sec-head h2, .show-copy h2, .cta h2 { font-size: clamp(28px, 8vw, 38px); margin: 14px 0 10px; }
+  .sec-head p, .show-copy > p, .cta p { font-size: 15.5px; }
+
+  /* features: swipe through them */
+  .bento {
+    display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+    margin-inline: calc(-16px - var(--safe-l)) calc(-16px - var(--safe-r)); padding: 4px 16px 8px; scroll-padding-inline: 16px;
+    overscroll-behavior-x: contain;
+  }
+  .bento::-webkit-scrollbar { display: none; }
+  .feat { flex: 0 0 min(84%, 360px); scroll-snap-align: start; padding: 22px; border-radius: 22px; }
+  .feat h3 { font-size: 17px; }
+  .feat p { font-size: 14.5px; }
   .span-2 { grid-column: auto; }
-  .steps { grid-template-columns: 1fr; gap: 36px; }
-  .steps-line { top: 28px; bottom: 28px; left: 50%; right: auto; width: 2px; height: auto; }
+  .feat-dots { display: flex; justify-content: center; gap: 6px; margin-top: 14px; }
+  .feat-dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 99px; background: var(--border-2); cursor: pointer; transition: width .35s var(--ease), background .3s; }
+  .feat-dots button.on { width: 24px; background: var(--grad); }
+
+  /* steps: vertical timeline */
+  .steps { grid-template-columns: 1fr; gap: 22px; max-width: 520px; margin-inline: auto; }
+  .steps-line { top: 28px; bottom: 28px; left: 27px; right: auto; width: 2px; height: auto; }
   .steps-line span { width: 100%; height: 100%; transform: scaleY(0); transform-origin: top; }
   .steps.in .steps-line span { transform: scaleY(1); }
-  .step { background: var(--bg); padding-bottom: 8px; }
-  .float { display: none; }
-  .mock-body { grid-template-columns: 1fr; }
-  .tiles { grid-template-columns: repeat(3, 1fr); }
-  .ticket { min-height: 240px; }
-  .dash-kpis { grid-template-columns: 1fr; }
-  .bars { height: 170px; gap: 6px; }
-  .foot { grid-template-columns: 1fr; }
-  .foot-cols { gap: 40px; }
+  .step { display: grid; grid-template-columns: 56px 1fr; gap: 16px; align-items: start; text-align: left; padding: 0; }
+  .step-n { margin: 0; }
+  .step-text { padding-top: 4px; }
+  .step h3 { font-size: 17px; margin-bottom: 4px; }
+  .step p { margin: 0; font-size: 14.5px; max-width: none; }
+
+  /* showcase */
+  .ticks li { font-size: 14.5px; align-items: flex-start; }
+  .dash { padding: 16px; border-radius: 22px; }
+  .dash-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .dash-kpis > div { padding: 10px; border-radius: 12px; }
+  .dash-kpis small { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dash-kpis b { font-size: clamp(14px, 4.4vw, 19px); }
+  .dash-kpis em { font-size: 10.5px; }
+  .bars { height: 160px; gap: 6px; margin-top: 16px; }
+
+  /* install */
+  .install { border-radius: 24px; gap: 22px; text-align: center; }
+  .install .hero-actions { justify-content: center; }
+  .install-points li { padding: 12px 14px; font-size: 14px; text-align: left; }
+
+  /* faq */
+  .qa { border-radius: 16px; }
+  .qa button { padding: 16px 16px; font-size: 15px; min-height: 58px; }
+  .ans p { padding: 0 16px 16px; font-size: 14.5px; }
+
+  /* cta + footer */
+  .cta { padding: 44px 20px; border-radius: 24px; }
+  .cta .hero-actions .btn { flex: 1 1 100%; }
+  .foot { grid-template-columns: 1fr; gap: 26px; padding: 56px 0 calc(100px + var(--safe-b)); }
+  .foot-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .foot-cols button { min-height: 32px; font-size: 14.5px; }
+  .foot-bottom { flex-direction: column; }
+
+  /* sticky call to action */
+  .mobile-cta {
+    position: fixed; z-index: 45; left: 0; right: 0; bottom: 0;
+    display: flex; gap: 8px; padding: 10px max(12px, var(--safe-r)) calc(10px + var(--safe-b)) max(12px, var(--safe-l));
+    background: color-mix(in srgb, var(--bg) 84%, transparent); border-top: 1px solid var(--border);
+    backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  }
+  .mobile-cta .btn-primary { flex: 1; min-width: 0; }
+  .bar-enter-active, .bar-leave-active { transition: transform .45s var(--ease), opacity .3s; }
+  .bar-enter-from, .bar-leave-to { transform: translateY(100%); opacity: 0; }
 }
-@media (max-width: 420px) {
-  .tiles { grid-template-columns: repeat(2, 1fr); }
-  .hero-actions .btn { width: 100%; }
+@media (max-width: 380px) {
+  .nav-cta .btn-primary { display: none; } /* still in the menu and the sticky bar */
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tiles .tile:nth-child(n + 5) { display: none; }
+  .stat b { font-size: 28px; }
+  .dash-kpis { grid-template-columns: 1fr; }
+}
+/* short landscape phones */
+@media (max-height: 500px) and (orientation: landscape) {
+  .hero { padding-top: 20px; }
+  .hero-title { font-size: clamp(32px, 6vw, 48px); }
+}
+/* touch: no hover-only effects */
+@media (hover: none) {
+  .feat:hover { transform: none; }
+  .feat:hover::before { opacity: 0; }
+  .feat:hover .k { animation: none; }
+  .bar .b em { opacity: 1; translate: -50% 0; font-size: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .reveal, .step { opacity: 1 !important; }
