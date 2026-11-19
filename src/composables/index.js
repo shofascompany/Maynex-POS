@@ -1,6 +1,7 @@
 import { reactive, watch } from 'vue'
 import { usePos } from '@/stores/pos'
 import { formatMoney, formatMoneyCompact } from '@/utils/format'
+import { openInstall } from './pwa'
 
 /* Money */
 export function useMoney() {
@@ -23,6 +24,13 @@ export function toast(message, type = 'success', timeout = 2800) {
 export function dismissToast(id) {
   const i = toasts.findIndex((t) => t.id === id)
   if (i > -1) toasts.splice(i, 1)
+}
+
+/** Install button handler shared by every screen: direct install, or a one-line hint where that isn't possible. */
+export async function installNow() {
+  const r = await openInstall()
+  if (r.installed) toast('Maynex POS is installed. Open it from your desktop, taskbar or home screen.')
+  else if (r.hint) toast(r.hint, 'info', 6000)
 }
 
 /* Confirm dialog */

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { UserPlus, Pencil, Trash2, Check, X, KeyRound, ShieldCheck, Eye, EyeOff, AtSign, Info, Crown } from '@lucide/vue'
+import { UserPlus, Pencil, Trash2, Check, X, KeyRound, ShieldCheck, Eye, EyeOff, AtSign, Info, Crown, Copy } from '@lucide/vue'
 import { usePos, makeUsername } from '@/stores/pos'
 import { useMoney, toast, confirm } from '@/composables'
 import { ROLES, ROLE_ORDER, PERMISSIONS, SWATCHES } from '@/utils/constants'
@@ -56,6 +56,17 @@ async function remove(s) {
   const r = pos.deleteStaff(s.id)
   toast(r.ok ? 'Team member removed' : r.message, r.ok ? 'info' : 'warning')
 }
+// the code staff use to sign in from any browser; the link fills it in for them
+const shopCode = computed(() => pos.business?.code || '')
+async function copyLink() {
+  const link = `${location.origin}/#/login?shop=${shopCode.value}`
+  try {
+    await navigator.clipboard.writeText(link)
+    toast('Sign-in link copied. Send it to your team.')
+  } catch {
+    toast(link, 'info', 8000)
+  }
+}
 function toggleActive(s) {
   if (s.id === pos.currentUser?.id) return toast("You can't disable your own account", 'warning')
   const r = pos.saveStaff({ ...s, active: !s.active })
@@ -75,7 +86,9 @@ function toggleActive(s) {
 
     <div class="howto card rise">
       <Info :size="17" />
-      <span>Staff sign in on this business’s devices with their <b>username</b> and <b>4-digit PIN</b>, on the same login screen the owner uses.</span>
+      <span v-if="shopCode" class="grow">Staff sign in from <b>any browser</b> or the installed app with the shop code <b class="code mono">{{ shopCode }}</b>, their <b>username</b> and <b>4-digit PIN</b>.</span>
+      <span v-else class="grow">Staff sign in with their <b>username</b> and <b>4-digit PIN</b>. Your shop code for signing in from other browsers appears here once this device has synced.</span>
+      <button v-if="shopCode" class="btn btn-soft btn-sm" @click="copyLink"><Copy :size="14" /> Copy sign-in link</button>
     </div>
 
     <TransitionGroup tag="div" name="list" class="sgrid mt">
@@ -180,6 +193,8 @@ function toggleActive(s) {
 .perm.yes { color: #fff; background: var(--grad); }
 .howto { display: flex; align-items: center; gap: 10px; padding: 12px 16px; font-size: 13.5px; color: var(--text-2); }
 .howto svg { flex-shrink: 0; color: var(--accent-ink); }
+.howto { flex-wrap: wrap; }
+.howto .code { padding: 2px 8px; border-radius: 7px; letter-spacing: .15em; color: var(--accent-ink); background: color-mix(in srgb, var(--c1) 14%, transparent); }
 .uname { display: inline-flex; align-items: center; gap: 2px; font-size: 12.5px; color: var(--text-2); }
 .duty { max-width: 220px; line-height: 1.4; min-height: 2.8em; }
 .roles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }

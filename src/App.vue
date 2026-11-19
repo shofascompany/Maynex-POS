@@ -11,7 +11,6 @@ import MobileTabBar from '@/components/MobileTabBar.vue'
 import ToastStack from '@/components/ToastStack.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import BaseModal from '@/components/BaseModal.vue'
-
 const pos = usePos()
 const ui = useUi()
 const route = useRoute()

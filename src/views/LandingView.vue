@@ -4,10 +4,11 @@ import { useRouter } from 'vue-router'
 import {
   Zap, WifiOff, ChartColumn, Package, Users, ScanBarcode, ShieldCheck, Smartphone, ArrowRight, Check,
   Sparkles, Store, Menu, X, Clock, ChevronDown, Coffee, ShoppingBag, Scissors, Sun, Moon, Gift,
-  Lock, TrendingUp, CreditCard, Layers, MonitorDown, Download,
+  Lock, TrendingUp, CreditCard, Layers, MonitorDown, Download, Monitor, KeyRound,
 } from '@lucide/vue'
 import { usePos } from '@/stores/pos'
-import { canInstall, installed, installApp } from '@/composables/pwa'
+import { installed, detectDevice } from '@/composables/pwa'
+import { installNow } from '@/composables'
 import { CURRENCIES, ROLES, PAYMENT_METHODS } from '@/utils/constants'
 import BrandMark from '@/components/BrandMark.vue'
 import Wordmark from '@/components/Wordmark.vue'
@@ -78,8 +79,10 @@ function go(id) {
 const start = () => router.push(pos.signedIn ? { name: 'login' } : { name: 'signup' })
 const signIn = () => router.push({ name: 'login' })
 const ctaLabel = computed(() => (pos.signedIn ? `Open ${pos.business?.name || 'the register'}` : 'Create your business'))
+const onDesktop = detectDevice().desktop
 async function install() {
-  await installApp()
+  menuOpen.value = false
+  await installNow()
 }
 const isDark = computed(() => pos.settings.theme !== 'light')
 const toggleTheme = () => (pos.settings.theme = isDark.value ? 'light' : 'dark')
@@ -191,7 +194,8 @@ const faqs = [
   { q: 'Does Maynex POS process card payments?', a: 'Maynex POS records how each sale was paid (cash, card, mobile or a split) and calculates change. It doesn’t connect to card terminals, so charge the card on your terminal as usual and then complete the sale in Maynex POS.' },
   { q: 'Where is my data stored, and is it private?', a: 'In your business account on the Maynex POS server, with a working copy on each of your signed-in devices. Every business is kept separate from every other one. You can also download a full backup from Settings → Data & backup at any time.' },
   { q: 'Which staff roles are there?', a: 'Six. Managers run everything. Supervisors sell, refund and run cash shifts. Cashiers sell and see only their own sales. Procurement manages products and stock. Accountants see sales, reports and cash reconciliation. Customer service looks after customers and their orders. Each role sees only its own screens.' },
-  { q: 'How do I put Maynex POS on my device?', a: 'Use “Install app” on this page or in Settings, or your browser’s install option. Maynex POS then opens in its own window from your desktop, dock or home screen. On iPhone and iPad, choose Share → Add to Home Screen in Safari.' },
+  { q: 'How do I put Maynex POS on my device?', a: 'Press “Install” on this page or in Settings. Maynex POS then opens in its own window from your desktop, taskbar, dock or home screen.' },
+  { q: 'Do my staff have to install it?', a: 'No. Staff can sign in from any browser, or from the installed app, with your shop code, their username and their PIN. The shop code is on your Team page. Sales, stock and shifts sync between every device.' },
 ]
 const openFaq = ref(0)
 
@@ -281,7 +285,7 @@ const year = new Date().getFullYear()
               <Moon v-else key="m" :size="16" />
             </Transition>
           </button>
-          <button v-if="canInstall" class="btn btn-ghost btn-sm hide-sm" @click="install"><MonitorDown :size="15" /> Install</button>
+          <button v-if="!installed" class="btn btn-ghost btn-sm hide-sm" @click="install"><MonitorDown :size="15" /> Install</button>
           <button class="btn btn-ghost btn-sm hide-sm" @click="signIn">Sign in</button>
           <button class="btn btn-primary btn-sm" @click="start">{{ pos.signedIn ? 'Open app' : 'Get started' }}</button>
           <button class="icon-btn sm burger" :aria-expanded="menuOpen" aria-label="Menu" @click="menuOpen = !menuOpen">
@@ -292,11 +296,10 @@ const year = new Date().getFullYear()
       <Transition name="drop">
         <div v-if="menuOpen" class="mobile-menu">
           <button v-for="l in links" :key="l.id" class="mm-link" @click="go(l.id)">{{ l.label }}<ArrowRight :size="16" /></button>
-          <button class="mm-link" @click="go('install')">Install the app<ArrowRight :size="16" /></button>
+          <button v-if="!installed" class="mm-link" @click="install">Install the app<ArrowRight :size="16" /></button>
           <div class="mm-actions">
             <button class="btn btn-primary btn-lg btn-block" @click="start">{{ ctaLabel }} <ArrowRight :size="16" /></button>
             <button class="btn btn-lg btn-block" @click="signIn">Sign in</button>
-            <button v-if="canInstall" class="btn btn-ghost btn-block" @click="install"><MonitorDown :size="15" /> Install app</button>
           </div>
         </div>
       </Transition>
@@ -327,7 +330,7 @@ const year = new Date().getFullYear()
           </p>
           <div class="hero-actions rise" style="--i: 10">
             <button class="btn btn-primary btn-lg" @click="start">{{ ctaLabel }} <ArrowRight :size="17" /></button>
-            <button v-if="canInstall" class="btn btn-lg" @click="install"><Download :size="17" /> Install app</button>
+            <button v-if="!installed" class="btn btn-lg" @click="install"><Download :size="17" /> {{ onDesktop ? 'Install on desktop' : 'Install app' }}</button>
             <button v-else class="btn btn-lg" @click="go('features')">See how it works</button>
           </div>
           <ul class="hero-proof rise" style="--i: 11">
@@ -544,19 +547,20 @@ const year = new Date().getFullYear()
     <section id="install" class="wrap section">
       <div v-reveal class="install card">
         <div class="install-copy">
-          <span class="eyebrow"><MonitorDown :size="14" /> Install it like an app</span>
-          <h2>On the counter, <span class="gradient-text">in one tap.</span></h2>
-          <p>Install Maynex POS and it opens in its own window from your desktop, dock or home screen, with no browser bars and no internet needed.</p>
+          <span class="eyebrow"><MonitorDown :size="14" /> Desktop app or any browser</span>
+          <h2>On every counter, <span class="gradient-text">in one click.</span></h2>
+          <p>Install Maynex POS on your computers, tablets and phones, or just open it in a browser. Your team signs in anywhere with the shop code, their username and PIN.</p>
           <div class="hero-actions">
             <button v-if="installed" class="btn btn-lg" disabled><Check :size="17" /> Installed on this device</button>
-            <button v-else-if="canInstall" class="btn btn-primary btn-lg" @click="install"><Download :size="17" /> Install Maynex POS</button>
-            <p v-else class="muted small">In Chrome or Edge, use the install icon in the address bar. On iPhone or iPad, tap Share → Add to Home Screen in Safari.</p>
+            <button v-else class="btn btn-primary btn-lg" @click="install"><Download :size="17" /> {{ onDesktop ? 'Install on this computer' : 'Install on this device' }}</button>
+            <button class="btn btn-lg" @click="signIn">Team sign in</button>
           </div>
         </div>
         <ul class="install-points">
-          <li><Smartphone :size="18" /> Phones, tablets and computers</li>
-          <li><WifiOff :size="18" /> Opens and sells offline</li>
-          <li><Zap :size="18" /> Shortcuts to Register, Orders and Inventory</li>
+          <li><Monitor :size="18" /> Its own window on Windows, Mac and Chromebook</li>
+          <li><Users :size="18" /> Staff sign in from any browser, no install needed</li>
+          <li><KeyRound :size="18" /> Everyone has their own username and PIN</li>
+          <li><WifiOff :size="18" /> Keeps selling offline and syncs when back</li>
         </ul>
       </div>
     </section>
@@ -793,6 +797,7 @@ const year = new Date().getFullYear()
 .install-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .install-points li { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border); font-weight: 650; }
 .install-points svg { color: var(--accent-ink); flex-shrink: 0; }
+.install-note { margin-top: 14px; }
 @media (max-width: 860px) { .install { grid-template-columns: 1fr; } }
 .dash-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .dash-kpis > div { padding: 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); }

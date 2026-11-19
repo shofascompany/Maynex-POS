@@ -77,8 +77,10 @@ function sortList(c, list) {
 
 const bizFromRow = (b, email) => ({
   id: b.id, name: b.name, status: b.status, suspendedReason: b.suspended_reason || '', email: email || '',
-  businessType: b.business_type || '', country: b.country || '', city: b.city || '',
+  businessType: b.business_type || '', country: b.country || '', city: b.city || '', code: b.code || '',
 })
+// set while a team member is signed in through a browser with the shop code (not an owner-linked device)
+const WEB_SESSION_KEY = 'maynex:staff-web-session'
 
 export const useSync = defineStore('sync', () => {
   const pos = usePos()
@@ -528,6 +530,40 @@ export const useSync = defineStore('sync', () => {
     if (res.error) throw new Error(friendlyError(res.error))
     await connect(res.data.session)
   }
+  /**
+   * A team member signs in from any browser with the shop code, their username and PIN.
+   * The server checks the PIN; this browser then syncs the shop like a linked device.
+   * Returns the local staff profile that was signed in.
+   */
+  async function staffSignIn(code, username, pin) {
+    if (!sb) throw new Error('The server is not connected yet.')
+    error.value = ''
+    let session = (await sb.auth.getSession()).data.session
+    if (!session) {
+      const res = await sb.auth.signInAnonymously()
+      if (res.error) {
+        throw new Error(/anonymous/i.test(res.error.message || '')
+          ? 'Staff sign-in from the web isn’t switched on for this server yet. Ask the business owner.'
+          : friendlyError(res.error))
+      }
+      session = res.data.session
+    }
+    const r = must(await sb.rpc('staff_sign_in', { p_code: code, p_username: username, p_pin: pin }))
+    if (!r?.ok) throw new Error(r?.message || 'That username and PIN don’t match.')
+    localStorage.setItem(WEB_SESSION_KEY, '1')
+    await connect(session)
+    const user = pos.staff.find((s) => s.id === r.staff_id && s.active)
+    if (!user) throw new Error('Your profile could not be loaded. Try again.')
+    pos.session = { userId: user.id, at: Date.now() }
+    return user
+  }
+  const isWebSession = () => localStorage.getItem(WEB_SESSION_KEY) === '1'
+  /** Lock / sign out: a browser that a team member signed in with the shop code is signed out of the shop too. */
+  async function endWorkerSession() {
+    pos.logout()
+    if (isWebSession()) await signOutBusiness()
+  }
+
   async function resetPassword(mail) {
     if (!sb) throw new Error('The server is not connected yet.')
     const res = await sb.auth.resetPasswordForEmail(mail.trim().toLowerCase(), { redirectTo: location.origin + '/' })
@@ -562,6 +598,7 @@ export const useSync = defineStore('sync', () => {
     }
     stop('signed-out')
     localStorage.removeItem(HASH_KEY)
+    localStorage.removeItem(WEB_SESSION_KEY)
     bid = null
     pos.leaveBusiness()
   }
@@ -592,6 +629,6 @@ export const useSync = defineStore('sync', () => {
 
   return {
     status, error, email, lastSyncedAt, configured, fromEnv, projectUrl, platform, online, recovering,
-    init, signIn, signUpBusiness, resetPassword, updatePassword, signOutBusiness, saveProject, syncNow, loadPlatform,
+    init, signIn, staffSignIn, endWorkerSession, signUpBusiness, resetPassword, updatePassword, signOutBusiness, saveProject, syncNow, loadPlatform,
   }
 })

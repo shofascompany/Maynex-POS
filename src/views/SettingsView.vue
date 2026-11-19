@@ -1,12 +1,12 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Store, Percent, Star, Receipt, Palette, Database, Download, Upload, Trash2, Sun, Moon, Check, CloudCheck, MonitorDown, Share, Cloud, RefreshCw, LogOut, LogIn, Unplug } from '@lucide/vue'
+import { Store, Percent, Star, Receipt, Palette, Database, Download, Upload, Trash2, Sun, Moon, Check, CloudCheck, MonitorDown, Cloud, RefreshCw, LogOut, LogIn, Unplug } from '@lucide/vue'
 import { usePos } from '@/stores/pos'
 import { useSync } from '@/stores/sync'
 import { timeAgo } from '@/utils/format'
-import { toast, confirm } from '@/composables'
-import { canInstall, installed, isIOS, installApp } from '@/composables/pwa'
+import { toast, confirm, installNow } from '@/composables'
+import { installed } from '@/composables/pwa'
 import { CURRENCIES, ACCENTS } from '@/utils/constants'
 import { download, toDateInput, formatMoney } from '@/utils/format'
 import ReceiptPaper from '@/components/ReceiptPaper.vue'
@@ -64,9 +64,6 @@ async function leave() {
   router.replace({ name: 'login' })
 }
 
-async function install() {
-  if (await installApp()) toast('Maynex POS is installed. Open it from your home screen or app list.')
-}
 const activeSection = ref('store')
 function go(id) {
   activeSection.value = id
@@ -223,10 +220,11 @@ async function wipe() {
 
         <section id="set-app" class="card card-pad rise" style="--i: 5">
           <div class="sec-head"><span class="sec-ico"><MonitorDown :size="18" /></span><div><h3>Install app</h3><p class="muted small">Run Maynex POS in its own window, from your desktop, dock or home screen. It keeps working offline.</p></div></div>
-          <div v-if="installed" class="example"><Check :size="15" class="inline" /> Maynex POS is running as an installed app on this device.</div>
-          <button v-else-if="canInstall" class="btn btn-primary btn-lg" @click="install"><MonitorDown :size="18" /> Install Maynex POS on this device</button>
-          <p v-else-if="isIOS" class="example">On iPhone or iPad: tap <Share :size="14" class="inline" /> <b>Share</b> in Safari, then <b>Add to Home Screen</b>.</p>
-          <p v-else class="example">Your browser hasn't offered installation yet. In Chrome or Edge, use the install icon at the right of the address bar, or the menu → <b>Install Maynex POS</b>. Installation needs the site to be opened over https or on localhost.</p>
+          <div class="stack">
+            <div v-if="installed" class="example"><Check :size="15" class="inline" /> Maynex POS is running as an installed app on this device.</div>
+            <button v-if="!installed" class="btn btn-primary btn-lg" style="align-self: flex-start" @click="installNow"><MonitorDown :size="18" /> Install Maynex POS</button>
+            <p class="muted small">Your team can also sign in from any browser with the shop code from the Team page.</p>
+          </div>
         </section>
 
         <section id="set-account" class="card card-pad rise" style="--i: 6">

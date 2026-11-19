@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { LayoutDashboard, ShoppingCart, ReceiptText, Package, Users, ChartColumn, UserCog, Clock, Settings } from '@lucide/vue'
 import { usePos } from '@/stores/pos'
+import { installed } from '@/composables/pwa'
 
 // `perm` may be a list: the item shows when the worker has any of them.
 export const NAV = [
@@ -48,7 +49,8 @@ router.beforeEach((to) => {
   if (to.meta.admin || to.meta.landing) return true // platform admin and marketing pages stand alone
 
   // 1. the device must belong to a business (the login page links it, the sign-up page creates one)
-  if (!pos.signedIn) return to.meta.guest || to.name === 'login' ? true : to.fullPath === '/' ? { name: 'landing' } : { name: 'login' }
+  // (the installed app skips the marketing page and opens on sign-in)
+  if (!pos.signedIn) return to.meta.guest || to.name === 'login' ? true : to.fullPath === '/' && !installed.value ? { name: 'landing' } : { name: 'login' }
   if (to.meta.guest) return pos.currentUser ? homeFor(pos) : { name: 'login' }
 
   // 2. a suspended business can only see the notice

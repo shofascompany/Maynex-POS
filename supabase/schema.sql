@@ -334,6 +334,8 @@ declare
   b public.businesses;
 begin
   if auth.uid() is null then raise exception 'Sign in first'; end if;
+  -- staff browser sessions are anonymous logins: they can never create a business
+  if coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) then raise exception 'Create an owner account to start a business.'; end if;
   if not (select allow_signups from public.platform_settings where id = 'main') then
     raise exception 'New sign-ups are closed right now. Please try again later.';
   end if;
@@ -430,6 +432,101 @@ begin
   delete from public.platform_admins where user_id = target;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Staff sign-in from any browser
+--
+-- Each shop gets a short shop code. A team member opens the site in any browser and
+-- signs in with the shop code + their username + PIN. The browser gets an anonymous
+-- Supabase login, and staff_sign_in() checks the PIN on the server and makes that
+-- login a 'staff' member of the shop. Wrong PINs lock that username for a while.
+--
+-- REQUIRED once in the dashboard: Authentication -> Sign In / Providers ->
+-- "Allow anonymous sign-ins" = ON. (Anonymous logins can't do anything until
+-- staff_sign_in() accepts a correct PIN, and can never create a business.)
+-- ---------------------------------------------------------------------------
+create or replace function public.maynex_new_code()
+returns text language plpgsql volatile set search_path = public as $$
+declare
+  alphabet constant text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; -- no 0/O or 1/I
+  c text;
+begin
+  loop
+    c := '';
+    for i in 1..6 loop
+      c := c || substr(alphabet, 1 + floor(random() * length(alphabet))::int, 1);
+    end loop;
+    exit when not exists (select 1 from public.businesses where code = c);
+  end loop;
+  return c;
+end;
+$$;
+
+alter table public.businesses add column if not exists code text;
+update public.businesses set code = public.maynex_new_code() where code is null;
+alter table public.businesses alter column code set default public.maynex_new_code();
+create unique index if not exists businesses_code_idx on public.businesses (code);
+
+create table if not exists public.staff_login_attempts (
+  business_id   uuid not null references public.businesses (id) on delete cascade,
+  username      text not null,
+  fails         integer not null default 0,
+  level         integer not null default 0,
+  locked_until  timestamptz,
+  primary key (business_id, username)
+);
+alter table public.staff_login_attempts enable row level security;
+revoke all on public.staff_login_attempts from anon, authenticated;
+
+-- Returns { ok, staff_id } or { ok: false, message }. It returns instead of raising so a
+-- wrong PIN is still counted (an exception would roll the counter back).
+create or replace function public.staff_sign_in(p_code text, p_username text, p_pin text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  b      public.businesses;
+  s      public.staff;
+  att    public.staff_login_attempts;
+  uname  text := lower(trim(coalesce(p_username, '')));
+  wait   integer;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'message', 'Sign-in session missing. Reload and try again.'); end if;
+  select * into b from public.businesses where code = upper(trim(coalesce(p_code, '')));
+  if not found then return jsonb_build_object('ok', false, 'message', 'No shop uses that code. Check it with your manager.'); end if;
+
+  select * into att from public.staff_login_attempts where business_id = b.id and username = uname;
+  if att.locked_until is not null and att.locked_until > now() then
+    wait := ceil(extract(epoch from att.locked_until - now()) / 60.0);
+    return jsonb_build_object('ok', false, 'message', format('Too many wrong PINs. Try again in %s minute%s.', wait, case when wait = 1 then '' else 's' end));
+  end if;
+
+  select * into s from public.staff
+   where business_id = b.id and lower(username) = uname and active and pin = coalesce(p_pin, '');
+  if not found then
+    insert into public.staff_login_attempts (business_id, username, fails) values (b.id, uname, 1)
+    on conflict (business_id, username) do update set fails = staff_login_attempts.fails + 1;
+    -- 5 wrong tries: lock for 1, 2, 4, 8… minutes
+    update public.staff_login_attempts
+       set level = level + 1, fails = 0, locked_until = now() + make_interval(mins => power(2, level)::int)
+     where business_id = b.id and username = uname and fails >= 5;
+    return jsonb_build_object('ok', false, 'message', 'That username and PIN don’t match.');
+  end if;
+
+  delete from public.staff_login_attempts where business_id = b.id and username = uname;
+  -- an owner login keeps its own business; staff browser logins belong to one shop at a time
+  if exists (select 1 from public.business_members where user_id = auth.uid() and role <> 'staff') then
+    return jsonb_build_object('ok', false, 'message', 'This browser is signed in to an owner account. Sign it out first.');
+  end if;
+  delete from public.business_members where user_id = auth.uid() and business_id <> b.id;
+  insert into public.business_members (business_id, user_id, role) values (b.id, auth.uid(), 'staff')
+  on conflict (business_id, user_id) do nothing;
+  return jsonb_build_object('ok', true, 'staff_id', s.id);
+end;
+$$;
+
+grant execute on function public.staff_sign_in(text, text, text) to authenticated;
+revoke execute on function public.staff_sign_in(text, text, text) from anon, public;
+revoke execute on function public.maynex_new_code() from anon, authenticated, public;
 
 grant execute on function public.create_business(jsonb) to authenticated;
 grant execute on function public.update_business_profile(uuid, jsonb) to authenticated;

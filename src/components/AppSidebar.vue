@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { LogOut, ChevronsLeft, Sun, Moon } from '@lucide/vue'
 import { usePos } from '@/stores/pos'
+import { useSync } from '@/stores/sync'
 import { NAV } from '@/router'
 import { useUi } from '@/composables'
 import { ROLES } from '@/utils/constants'
@@ -13,6 +14,7 @@ import Wordmark from './Wordmark.vue'
 defineProps({ open: Boolean })
 const emit = defineEmits(['update:open'])
 const pos = usePos()
+const sync = useSync()
 const ui = useUi()
 const router = useRouter()
 
@@ -24,8 +26,8 @@ function badge(name) {
   if (name === 'products' && pos.lowStock.length) return { n: pos.lowStock.length, tone: 'warn' }
   return null
 }
-function signOut() {
-  pos.logout()
+async function signOut() {
+  await sync.endWorkerSession()
   router.push({ name: 'login' })
 }
 </script>

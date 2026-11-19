@@ -20,6 +20,10 @@ const busy = ref(false)
 const shake = ref(false)
 
 const isEmail = computed(() => who.value.includes('@'))
+// staff on a browser that isn't linked to a shop also give the shop code (from their manager, or a ?shop= link)
+const SHOP_KEY = 'maynex:last-shop'
+const shopCode = ref(String(route.query.shop || localStorage.getItem(SHOP_KEY) || '').toUpperCase())
+const needCode = computed(() => !pos.signedIn && !!who.value && !isEmail.value)
 const secretLabel = computed(() => (who.value ? (isEmail.value ? 'Password' : 'PIN') : 'Password or PIN'))
 
 // wrong-PIN lockout, kept per device: 5 tries, then a pause that doubles each time
@@ -84,10 +88,28 @@ async function submit() {
     }
     return
   }
-  // staff: username + PIN, checked on this device
-  if (!pos.signedIn) return bounce('This device isn’t linked to a business yet. The owner signs in here once with email and password.')
-  if (lockedFor.value) return bounce(`Too many wrong PINs. Try again in ${lockedFor.value}s.`)
   if (!/^\d{4}$/.test(secret.value)) return bounce('Staff PINs are 4 digits')
+  // staff on a browser not linked to a shop: shop code + username + PIN, checked by the server
+  if (!pos.signedIn) {
+    const code = shopCode.value.trim().toUpperCase()
+    if (!/^[A-Z0-9]{6}$/.test(code)) return bounce('Enter the 6-character shop code from your manager')
+    if (!sync.configured) return bounce('The server isn’t connected yet.')
+    busy.value = true
+    try {
+      const user = await sync.staffSignIn(code, who.value.trim(), secret.value)
+      localStorage.setItem(SHOP_KEY, code)
+      if (pos.suspended) return router.replace({ name: 'suspended' })
+      go(user)
+    } catch (e) {
+      secret.value = ''
+      bounce(e.message)
+    } finally {
+      busy.value = false
+    }
+    return
+  }
+  // staff: username + PIN, checked on this device
+  if (lockedFor.value) return bounce(`Too many wrong PINs. Try again in ${lockedFor.value}s.`)
   const user = pos.login(secret.value, who.value)
   if (!user) {
     failPin()
@@ -116,17 +138,24 @@ async function forgot() {
 <template>
   <AuthShell
     :title="mode === 'login' ? (pos.signedIn ? `Sign in to ${pos.business.name}` : 'Sign in') : mode === 'forgot' ? 'Reset the owner password' : 'Check your email'"
-    :subtitle="mode === 'login' ? 'Owners use their email and password. Staff use their username and PIN.' : mode === 'forgot' ? 'We’ll email a link to choose a new password.' : ''"
+    :subtitle="mode === 'login' ? (pos.signedIn ? 'Owners use their email and password. Staff use their username and PIN.' : 'Welcome back to Maynex POS.') : mode === 'forgot' ? 'We’ll email a link to choose a new password.' : ''"
   >
     <form v-if="mode === 'login'" class="stack" :class="{ shake }" @submit.prevent="submit">
       <div v-if="pos.signedIn" class="linked"><Store :size="15" /> This device is linked to <b>{{ pos.business.name }}</b></div>
-      <div v-else class="linked off"><Info :size="15" /> New device? The owner signs in once with email and password, then staff can use it.</div>
+      <div v-else class="linked off"><Info :size="15" /> Staff: sign in with your shop code, username and PIN. Owners use email and password.</div>
 
       <label class="field"><span class="label">Email or username</span>
         <div class="input-icon"><component :is="isEmail ? Mail : UserRound" :size="16" />
           <input v-model="who" class="input input-lg" autocomplete="username" autocapitalize="none" spellcheck="false" autofocus />
         </div>
       </label>
+      <Transition name="fade">
+        <label v-if="needCode" class="field"><span class="label">Shop code</span>
+          <div class="input-icon"><Store :size="16" />
+            <input v-model="shopCode" class="input input-lg code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. K7MX4Q" @input="shopCode = shopCode.toUpperCase()" />
+          </div>
+        </label>
+      </Transition>
       <label class="field">
         <span class="label row between">{{ secretLabel }}
           <button v-if="isEmail || !who" type="button" class="link" @click="mode = 'forgot'">Forgot password?</button>
@@ -141,7 +170,7 @@ async function forgot() {
       <button class="btn btn-primary btn-lg btn-block" type="submit" :disabled="busy">
         <span v-if="busy" class="spinner"></span>{{ busy ? 'Signing in…' : 'Sign in' }}<ArrowRight v-if="!busy" :size="17" />
       </button>
-      <p class="muted small tip">Staff: your username is on your Team card. Ask a manager if you’ve forgotten your PIN.</p>
+      <p class="muted small tip">Staff: your manager can give you the shop code, your username and PIN.</p>
     </form>
 
     <form v-else-if="mode === 'forgot'" class="stack" @submit.prevent="forgot">
@@ -175,6 +204,7 @@ async function forgot() {
 .pw { position: relative; }
 .pw .input { padding-right: 42px; }
 .mono { font-family: var(--mono); letter-spacing: .3em; }
+.code { font-family: var(--mono); letter-spacing: .25em; text-transform: uppercase; }
 .eye { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); }
 .locked { font-size: 13px; font-weight: 650; color: var(--danger); }
 .tip { text-align: center; }

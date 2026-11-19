@@ -6,12 +6,8 @@ import BrandMark from './BrandMark.vue'
 import { usePos } from '@/stores/pos'
 import { useSync } from '@/stores/sync'
 import { duration } from '@/utils/format'
-import { canInstall, installApp } from '@/composables/pwa'
-import { toast } from '@/composables'
-
-async function install() {
-  if (await installApp()) toast('Maynex POS is installed. Open it from your home screen or app list.')
-}
+import { installed } from '@/composables/pwa'
+import { toast, installNow as install } from '@/composables'
 
 const pos = usePos()
 const route = useRoute()
@@ -38,8 +34,8 @@ const shiftLabel = computed(() => (pos.activeShift ? `Shift open · ${duration(n
 function toggleTheme() {
   pos.settings.theme = pos.settings.theme === 'dark' ? 'light' : 'dark'
 }
-function lock() {
-  pos.logout()
+async function lock() {
+  await sync.endWorkerSession()
   router.push({ name: 'login' })
 }
 </script>
@@ -55,7 +51,7 @@ function lock() {
     </div>
     <div class="actions">
       <Transition name="pop">
-        <button v-if="canInstall" class="btn btn-soft btn-sm" title="Install Maynex POS as an app" @click="install"><MonitorDown :size="15" /><span class="hide-sm">Install app</span></button>
+        <button v-if="!installed" class="btn btn-soft btn-sm" title="Install Maynex POS as an app" @click="install"><MonitorDown :size="15" /><span class="hide-sm">Install app</span></button>
       </Transition>
       <RouterLink v-if="pos.can(['shifts', 'shiftsView'])" to="/shifts" class="shift-pill hide-sm" :class="{ on: pos.activeShift }">
         <span class="dot"></span>{{ shiftLabel }}
